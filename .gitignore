@@ -43,3 +43,8 @@ next-env.d.ts
 /data/jobs.json
 /public/uploads/*
 !/public/uploads/.gitkeep
+.env*
+
+# demo capture scratch (final mp4 + thumbnail are committed)
+/docs/demo-frames/
+/docs/slides/

@@ -58,6 +58,8 @@ Without credentials, the same path runs in **demo mode** (simulated order/captur
 
 ### Links
 
+- Live demo: https://jobproof-pay-agent.vercel.app
+- GitHub: https://github.com/icohangar-ops/jobproof-pay-agent
 - Hackathon: https://paypalaihackathon.devpost.com/  
 - Toolkit docs: https://developer.paypal.com/ai-tools/toolkit  
 
@@ -76,3 +78,9 @@ Without credentials, the same path runs in **demo mode** (simulated order/captur
 - PayPal Developer Platform (Orders v2, Payouts, Agent Toolkit)  
 - AI: local scorer + optional OpenAI  
 - Optional sponsor: AG Grid–style jobs table (lightweight HTML table MVP)  
+
+
+### Media
+
+- Thumbnail: `docs/thumbnail.png`
+- Demo video: `docs/jobproof-pay-agent-demo.mp4`

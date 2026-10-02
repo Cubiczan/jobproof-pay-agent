@@ -6,6 +6,13 @@ Hackathon MVP for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.co
 
 Contractor finishes a job → uploads before/after proof photos → local/heuristic AI scores completeness → on **pass**, a PayPal agent creates a **sandbox Order** (customer pay) and optionally a **Payout** to the contractor.
 
+## Live demo
+
+- **Hosted app:** https://jobproof-pay-agent.vercel.app
+- **Demo video:** [docs/jobproof-pay-agent-demo.mp4](./docs/jobproof-pay-agent-demo.mp4)
+- **Thumbnail:** [docs/thumbnail.png](./docs/thumbnail.png)
+- **Devpost draft copy:** [DEVPOST.md](./DEVPOST.md)
+
 ## Stack
 
 - Next.js 15 (App Router) + TypeScript + Tailwind CSS
