@@ -6,6 +6,16 @@ Hackathon MVP for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.co
 
 Contractor finishes a job → uploads before/after proof photos → local/heuristic AI scores completeness → on **pass**, a PayPal agent creates a **sandbox Order** (customer pay) and optionally a **Payout** to the contractor.
 
+<!-- product-screenshots:start -->
+## Product screenshots
+
+Job creation form with the app’s built-in demo values, before proof upload or payment processing.
+
+![jobproof-pay-agent product interface](docs/screenshots/product-overview.png)
+
+Captured from the [live UI](https://jobproof-pay-agent.vercel.app/jobs/new) on October 2, 2026. No payment, generation, or other action was submitted to create this capture.
+<!-- product-screenshots:end -->
+
 ## Live demo
 
 - **Hosted app:** https://jobproof-pay-agent.vercel.app
