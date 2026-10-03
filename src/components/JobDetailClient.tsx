@@ -279,8 +279,10 @@ export function JobDetailClient({ initialJob }: { initialJob: Job }) {
         <h2 className="text-lg font-semibold">3. Pay with PayPal (sandbox)</h2>
         <p className="mt-1 text-sm text-slate-500">
           On pass, the PayPal agent creates an Orders v2 order (customer pays), then capture.
-          Before a payout, an optional Jev text gate can approve or hold. Approve continues
-          into the existing sandbox payout. Hold stops it. Jev does not send the money.
+          Before a payout, an optional Jev text gate reads the written request. The sandbox
+          payout continues only when the Choice is approve, confidence meets the floor, and
+          the note does not dispute the payout. Jev does not send the payout and is not a
+          legal judgment.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <button

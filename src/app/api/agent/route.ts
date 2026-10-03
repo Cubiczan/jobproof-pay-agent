@@ -22,8 +22,8 @@ export async function GET() {
       "3. Local AI completeness scorer (optional OpenAI)",
       "4. On pass → PayPal agent create_order (Orders v2)",
       "5. Customer approves in sandbox → capture (pay_order)",
-      "6. Optional Jev text Choice (approve or hold) before payout, when JEV_API_KEY is set",
-      "7. On approve, or when Jev is unset, Payouts API → contractor email. Hold does not send a payout.",
+      "6. Optional Jev text gate (approve/hold Choice plus a dispute check) before payout, when JEV_API_KEY is set",
+      "7. Payouts API runs when that Choice is approve, confidence meets the floor, and the note does not dispute — or when Jev is unset. Otherwise the payout is not created.",
     ],
   });
 }

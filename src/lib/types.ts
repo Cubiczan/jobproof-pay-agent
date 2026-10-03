@@ -9,15 +9,20 @@ export type PaymentStatus =
   | "payout_sent"
   | "error";
 
-/** Text-only Jev Choice recorded before a contractor payout. */
+/** Text-only Jev gate recorded before a contractor payout. */
 export type JevPayoutDecision = {
-  /** approve may continue into PayPal; hold stops; skipped means no API key. */
+  /**
+   * approve may continue into PayPal only when confidence meets the floor and
+   * the dispute Noul is below 0.5. hold stops. skipped means no API key.
+   */
   decision: "approve" | "hold" | "skipped";
   /** True only after the existing PayPal payout function was invoked. */
   payoutAttempted: boolean;
   model: string | null;
   choice: string | null;
   confidence: number | null;
+  /** P(the note disputes, changes, or fails to support this payout). */
+  noul: number | null;
   probabilities: Record<string, number> | null;
   note: string;
   evaluatedAt: string;
