@@ -5,8 +5,23 @@ export type PaymentStatus =
   | "ready_to_pay"
   | "order_created"
   | "paid"
+  | "payout_held"
   | "payout_sent"
   | "error";
+
+/** Text-only Jev Choice recorded before a contractor payout. */
+export type JevPayoutDecision = {
+  /** approve may continue into PayPal; hold stops; skipped means no API key. */
+  decision: "approve" | "hold" | "skipped";
+  /** True only after the existing PayPal payout function was invoked. */
+  payoutAttempted: boolean;
+  model: string | null;
+  choice: string | null;
+  confidence: number | null;
+  probabilities: Record<string, number> | null;
+  note: string;
+  evaluatedAt: string;
+};
 
 export type AiScoreResult = {
   score: number;
@@ -34,6 +49,7 @@ export type Job = {
   paypalOrderId?: string;
   paypalCaptureId?: string;
   paypalPayoutBatchId?: string;
+  jevPayout?: JevPayoutDecision;
   createdAt: string;
   updatedAt: string;
   notes?: string;

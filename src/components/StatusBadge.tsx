@@ -7,6 +7,7 @@ const styles: Record<PaymentStatus, string> = {
   ready_to_pay: "bg-emerald-50 text-emerald-800",
   order_created: "bg-sky-50 text-sky-800",
   paid: "bg-indigo-50 text-indigo-800",
+  payout_held: "bg-amber-100 text-amber-950",
   payout_sent: "bg-green-100 text-green-900",
   error: "bg-red-100 text-red-800",
 };

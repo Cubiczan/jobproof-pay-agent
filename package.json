@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --import tsx --test src/lib/jev/payout-gate.test.ts"
   },
   "dependencies": {
     "@paypal/agent-toolkit": "^1.11.0",
@@ -24,6 +25,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.27",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   },
   "description": "AI verifies contractor proof; PayPal agent pays via sandbox Orders + Payouts",

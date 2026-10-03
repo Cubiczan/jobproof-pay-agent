@@ -22,7 +22,8 @@ export async function GET() {
       "3. Local AI completeness scorer (optional OpenAI)",
       "4. On pass → PayPal agent create_order (Orders v2)",
       "5. Customer approves in sandbox → capture (pay_order)",
-      "6. Optional Payouts API → contractor email",
+      "6. Optional Jev text Choice (approve or hold) before payout, when JEV_API_KEY is set",
+      "7. On approve, or when Jev is unset, Payouts API → contractor email. Hold does not send a payout.",
     ],
   });
 }
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
     reply = `PayPal mode: ${caps.mode}. Enabled tools: ${caps.tools.join(", ")}. Toolkit loaded: ${caps.toolkitLoaded}.`;
   } else if (message.includes("how") || message.includes("flow")) {
     reply =
-      "Flow: create job → upload before/after → run AI score → on pass create PayPal order → capture → payout contractor.";
+      "Flow: create job → upload before/after → run AI score → on pass create PayPal order → capture → optional Jev approve/hold gate → payout contractor only if the gate allows it.";
   }
 
   return NextResponse.json({ reply, agent: caps });

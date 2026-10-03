@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { getJob, updateJob } from "@/lib/store";
 import { agentCaptureOrder, agentPayoutToContractor } from "@/lib/paypal-agent";
+import { PayoutAfterGateError } from "@/lib/jev/payout-gate";
 import { notFound } from "next/navigation";
+import { JevPayoutNotice } from "@/components/JevPayoutNotice";
 import { StatusBadge } from "@/components/StatusBadge";
+import type { JevPayoutDecision, PaymentStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -22,21 +25,29 @@ export default async function SuccessPage({ params, searchParams }: Props) {
   if (
     orderId &&
     job.paymentStatus !== "paid" &&
-    job.paymentStatus !== "payout_sent"
+    job.paymentStatus !== "payout_sent" &&
+    job.paymentStatus !== "payout_held"
   ) {
     try {
       const capture = await agentCaptureOrder(orderId);
       let payoutBatchId = job.paypalPayoutBatchId;
-      let paymentStatus: "paid" | "payout_sent" =
+      let paymentStatus: PaymentStatus =
         capture.status === "COMPLETED" ? "paid" : "paid";
+      let jevPayout: JevPayoutDecision | undefined = job.jevPayout;
       try {
-        const payout = await agentPayoutToContractor({
+        const result = await agentPayoutToContractor({
           ...job,
           paypalOrderId: orderId,
         });
-        payoutBatchId = payout.batchId;
-        paymentStatus = "payout_sent";
-      } catch {
+        jevPayout = result.gate;
+        if (result.held) {
+          paymentStatus = "payout_held";
+        } else {
+          payoutBatchId = result.payout.batchId;
+          paymentStatus = "payout_sent";
+        }
+      } catch (err) {
+        if (err instanceof PayoutAfterGateError) jevPayout = err.gate;
         // capture succeeded; payout optional
       }
       job =
@@ -45,24 +56,37 @@ export default async function SuccessPage({ params, searchParams }: Props) {
           paypalCaptureId: capture.captureId,
           paypalPayoutBatchId: payoutBatchId,
           paymentStatus,
+          ...(jevPayout ? { jevPayout } : {}),
         })) || job;
     } catch (err) {
       console.error("Auto-capture on success page failed", err);
     }
   }
 
+  const held = job.paymentStatus === "payout_held";
+
   return (
     <div className="mx-auto max-w-lg space-y-6 text-center">
-      <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-8">
-        <p className="text-sm font-medium uppercase tracking-wide text-emerald-700">
-          Payment flow complete
+      <div
+        className={`rounded-3xl border p-8 ${
+          held ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"
+        }`}
+      >
+        <p
+          className={`text-sm font-medium uppercase tracking-wide ${
+            held ? "text-amber-800" : "text-emerald-700"
+          }`}
+        >
+          {held ? "Customer payment captured" : "Payment flow complete"}
         </p>
-        <h1 className="mt-2 text-3xl font-bold text-emerald-950">Success</h1>
-        <p className="mt-3 text-emerald-900/80">
+        <h1 className={`mt-2 text-3xl font-bold ${held ? "text-amber-950" : "text-emerald-950"}`}>
+          {held ? "Payout held" : "Success"}
+        </h1>
+        <p className={`mt-3 ${held ? "text-amber-950/80" : "text-emerald-900/80"}`}>
           Job <strong>{job.title}</strong> —{" "}
           <StatusBadge status={job.paymentStatus} />
         </p>
-        <dl className="mt-6 space-y-2 text-left text-sm text-emerald-950/80">
+        <dl className={`mt-6 space-y-2 text-left text-sm ${held ? "text-amber-950/80" : "text-emerald-950/80"}`}>
           <div className="flex justify-between gap-4">
             <dt>Amount</dt>
             <dd className="font-mono">
@@ -94,6 +118,9 @@ export default async function SuccessPage({ params, searchParams }: Props) {
             </div>
           )}
         </dl>
+        <div className="mt-6">
+          <JevPayoutNotice decision={job.jevPayout} />
+        </div>
       </div>
       <div className="flex justify-center gap-3">
         <Link href={`/jobs/${job.id}`} className="text-[#0070BA] underline">
