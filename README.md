@@ -74,7 +74,7 @@ NEXT_PUBLIC_PAYPAL_CLIENT_ID=...
 
 Optional: set `OPENAI_API_KEY` to augment the completeness score. The local scorer always remains the fallback.
 
-Optional: set `JEV_API_KEY` to run a text-only Jev (TypeSafe System One) Choice of **approve** or **hold** before a contractor payout. The call sends who, amount, and reason — not proof photos. A hold does not create a payout. An approve continues into the existing sandbox Payouts call and does not send money by itself. Leave the key empty to keep today's payout path. The default endpoint is `https://thejevai.com/v1/systemone` (same body as `https://api.typesafe.ai/v1/systemone`). Override with `JEV_API_URL` or `JEV_MODEL` if you need to.
+Optional: set `JEV_API_KEY` to run a text-only Jev (TypeSafe System One) gate before a contractor payout. One call sends who, amount, and reason — not proof photos — and asks for an **approve** / **hold** Choice plus a dispute check. The sandbox Payouts call runs only when the Choice is approve, confidence is at least 0.85, and the note does not dispute the payout. That result does not send money and is not a legal judgment. Anything else, including a failed call, does not create a payout. Leave the key empty to keep today's payout path with no Jev call. The default endpoint is `https://thejevai.com/v1/systemone` (same body as `https://api.typesafe.ai/v1/systemone`). Override with `JEV_API_URL` or `JEV_MODEL` if you need to.
 
 ## Scripts
 

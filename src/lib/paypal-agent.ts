@@ -164,8 +164,8 @@ export async function agentCaptureOrder(orderId: string) {
 export type ContractorPayout = Awaited<ReturnType<typeof createPayout>>;
 
 /**
- * Jev approve/hold gate, then the existing Payouts call.
- * Hold returns no batch. Approve does not create the batch; createPayout does.
+ * Jev approve/hold gate plus a dispute check, then the existing Payouts call.
+ * Hold returns no batch. A passing gate does not create the batch; createPayout does.
  */
 export async function agentPayoutToContractor(
   job: Job,
@@ -188,7 +188,7 @@ export function describeAgentCapabilities() {
     tools: ["create_order", "get_order", "pay_order", "payouts (REST)"],
     jevPayoutGate: {
       configured: Boolean(resolveJevApiKey(process.env)),
-      role: "text-only approve/hold Choice before payout; does not send money",
+      role: "text-only approve/hold Choice and dispute check before payout; does not send money or make a legal judgment",
     },
     aiRequired: false,
     notes:

@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Text gate before payout
 Before creating a contractor payout, the system SHALL send the written payout request (who, amount, and reason) to the Jev System One HTTP API as text when `JEV_API_KEY` is set. The request SHALL be a single POST to the host the app already uses (`https://thejevai.com/v1/systemone`, unless `JEV_API_URL` overrides it) and SHALL include both a Choice whose options are `approve` and `hold` and a Noul asking whether the note disputes, changes, or fails to support this payout. The system SHALL NOT send image bytes or image URLs. The system SHALL NOT ask Jev to compute an amount or write a legal judgment. The system SHALL NOT replace PayPal order creation, capture, or the payout call itself.
@@ -10,13 +10,6 @@ Before creating a contractor payout, the system SHALL send the written payout re
 #### Scenario: No images
 - **WHEN** the payout request is built from a job that has proof photos
 - **THEN** the System One state and questions do not include those images
-
-### Requirement: Missing key keeps the payout path
-When `JEV_API_KEY` is unset or blank, the system SHALL NOT call Jev and SHALL create the payout through the existing sandbox path. The system SHALL NOT crash.
-
-#### Scenario: Unset key
-- **WHEN** a payout is attempted and `JEV_API_KEY` is unset
-- **THEN** Jev is not called and the existing payout function runs
 
 ### Requirement: Hold stops the payout
 The system SHALL NOT create a PayPal payout unless the Choice is `approve`, its confidence is at least the named floor 0.85, and the dispute Noul is below 0.5. A Choice of `hold`, any other choice, confidence below 0.85, a missing confidence, a dispute Noul at or above 0.5, a missing or unusable Noul, or a failed call while a key is set SHALL NOT create a payout. The job SHALL record the hold.

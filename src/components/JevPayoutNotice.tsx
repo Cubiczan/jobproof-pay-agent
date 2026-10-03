@@ -1,7 +1,7 @@
 import type { JevPayoutDecision } from "@/lib/types";
 
 const DISCLAIMER =
-  "Text-only Choice gate. Jev does not see photos, does not send the payout, and is not the legal or financial judgment.";
+  "Text-only gate. Jev does not see photos, does not send the payout, and is not the legal or financial judgment.";
 
 export function JevPayoutNotice({ decision }: { decision?: JevPayoutDecision | null }) {
   if (!decision) return null;
@@ -22,13 +22,14 @@ export function JevPayoutNotice({ decision }: { decision?: JevPayoutDecision | n
 
   const confidence =
     decision.confidence == null ? null : `${Math.round(decision.confidence * 100)}% confidence`;
+  const dispute = decision.noul == null ? null : `dispute check ${Math.round(decision.noul * 100)}%`;
 
   return (
     <div className={`rounded-xl border px-4 py-3 text-left text-sm ${tone}`}>
       <p className="font-medium">Jev payout gate · {title}</p>
       <p className="mt-1">{decision.note}</p>
       <p className="mt-2 text-xs opacity-80">
-        {[decision.choice ? `Choice ${decision.choice}` : null, decision.model, confidence]
+        {[decision.choice ? `Choice ${decision.choice}` : null, decision.model, confidence, dispute]
           .filter(Boolean)
           .join(" · ") || "No model call"}
         {decision.payoutAttempted ? " · PayPal payout function was called" : " · PayPal payout function was not called"}

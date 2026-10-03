@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Job } from "../types";
 import {
+  PAYOUT_CONFIDENCE_FLOOR,
+  PAYOUT_DISPUTE_NOUL,
   buildPayoutGateRequest,
   parsePayoutChoice,
   payoutAfterJevGate,
@@ -27,33 +29,60 @@ function sampleJob(overrides: Partial<Job> = {}): Job {
   };
 }
 
-function choiceBody(choice: string, envelope = false) {
+function choiceBody(
+  choice: string,
+  options: { envelope?: boolean; confidence?: number; noul?: number | null } = {},
+) {
+  const confidence = options.confidence ?? 0.84;
+  const noul = options.noul === undefined ? 0.12 : options.noul;
+  const answers: Record<string, unknown> = {
+    payout_gate: {
+      type: "choice",
+      choice,
+      probabilities: { approve: choice === "approve" ? 0.91 : 0.09, hold: choice === "hold" ? 0.91 : 0.09 },
+      confidence,
+    },
+  };
+  if (noul !== null) {
+    answers.payout_dispute = { type: "noul", noul };
+  }
   const body = {
     model: "jev-1.13.0",
-    answers: {
-      payout_gate: {
-        type: "choice",
-        choice,
-        probabilities: { approve: choice === "approve" ? 0.91 : 0.09, hold: choice === "hold" ? 0.91 : 0.09 },
-        confidence: 0.84,
-      },
-    },
+    answers,
     usage: { input_tokens: 42, output_tokens: 8 },
   };
-  return envelope ? { result: body } : body;
+  return options.envelope ? { result: body } : body;
 }
 
 type Seen = { calls: number; url: string; auth: string; body: unknown };
+type MockMode = "pay" | "hold" | "error" | "envelope-hold" | "low-confidence" | "dispute";
 
-function mockFetch(mode: "approve" | "hold" | "error" | "envelope-hold", seen: Seen): typeof fetch {
+function responseFor(mode: MockMode): { status: number; json: unknown } {
+  if (mode === "error") return { status: 500, json: null };
+  if (mode === "low-confidence") {
+    return { status: 200, json: choiceBody("approve", { confidence: PAYOUT_CONFIDENCE_FLOOR - 0.01, noul: 0.12 }) };
+  }
+  if (mode === "dispute") {
+    return { status: 200, json: choiceBody("approve", { confidence: 0.91, noul: PAYOUT_DISPUTE_NOUL }) };
+  }
+  if (mode === "pay") {
+    return { status: 200, json: choiceBody("approve", { confidence: 0.91, noul: 0.12 }) };
+  }
+  return {
+    status: 200,
+    json: choiceBody("hold", { envelope: mode === "envelope-hold", confidence: 0.91, noul: 0.12 }),
+  };
+}
+
+function mockFetch(mode: MockMode, seen: Seen): typeof fetch {
   return (async (url: string | URL | Request, init?: RequestInit) => {
     seen.calls += 1;
     seen.url = String(url);
     seen.auth = new Headers(init?.headers).get("Authorization") ?? "";
     seen.body = JSON.parse(String(init?.body));
-    if (mode === "error") return new Response("nope", { status: 500 });
-    const choice = mode === "approve" ? "approve" : "hold";
-    return new Response(JSON.stringify(choiceBody(choice, mode === "envelope-hold")), {
+    const response = responseFor(mode);
+    if (response.status !== 200) return new Response("nope", { status: response.status });
+    return new Response(JSON.stringify(response.json), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
@@ -131,11 +160,17 @@ describe("payout gate", () => {
     const body = seen.body as {
       model: string;
       state: string;
-      questions: { payout_gate: { type: string; criteria: Record<string, string> } };
+      questions: {
+        payout_gate: { type: string; criteria: Record<string, string> };
+        payout_dispute: { type: string; criteria: { true: string; false: string } };
+      };
     };
     assert.equal(body.model, "jev-latest");
+    assert.equal(seen.calls, 1);
+    assert.deepEqual(Object.keys(body.questions).sort(), ["payout_dispute", "payout_gate"]);
     assert.equal(body.questions.payout_gate.type, "choice");
     assert.deepEqual(Object.keys(body.questions.payout_gate.criteria).sort(), ["approve", "hold"]);
+    assert.equal(body.questions.payout_dispute.type, "noul");
     assert.match(body.state, /Who: Ada Lovelace ada@example.com/);
     assert.match(body.state, /Amount: 125\.00 USD/);
     assert.match(body.state, /Reason: Kitchen backsplash — Replaced tile and grout/);
@@ -144,7 +179,7 @@ describe("payout gate", () => {
     assert.equal(JSON.stringify(body).includes("test-key"), false);
   });
 
-  it("continues into the payout function on approve without using the choice as a batch id", async () => {
+  it("pays on approve when confidence is high and the dispute Noul is low", async () => {
     const seen: Seen = { calls: 0, url: "", auth: "", body: null };
     const events: string[] = [];
     const outcome = await payoutAfterJevGate(
@@ -157,7 +192,7 @@ describe("payout gate", () => {
         env: { JEV_API_KEY: "test-key", JEV_API_URL: "https://api.typesafe.ai/v1/systemone" },
         fetchImpl: (async (url: string | URL | Request, init?: RequestInit) => {
           events.push("jev");
-          return mockFetch("approve", seen)(url, init);
+          return mockFetch("pay", seen)(url, init);
         }) as typeof fetch,
       },
     );
@@ -166,9 +201,74 @@ describe("payout gate", () => {
     assert.equal(outcome.held, false);
     if (outcome.held) return;
     assert.equal(outcome.gate.decision, "approve");
+    assert.equal(outcome.gate.confidence, 0.91);
+    assert.equal(outcome.gate.noul, 0.12);
     assert.equal(outcome.gate.payoutAttempted, true);
     assert.equal(outcome.payout.batchId, "FROM-PAYPAL");
+    assert.equal(seen.calls, 1);
     assert.equal(seen.url, "https://api.typesafe.ai/v1/systemone");
+  });
+
+  it("pays when confidence is exactly the floor and the dispute Noul is below 0.5", async () => {
+    let payoutCalls = 0;
+    const outcome = await payoutAfterJevGate(
+      sampleJob(),
+      async () => {
+        payoutCalls += 1;
+        return { batchId: "FROM-PAYPAL", status: "PENDING" };
+      },
+      {
+        env: { JEV_API_KEY: "test-key" },
+        fetchImpl: (async () =>
+          new Response(
+            JSON.stringify(choiceBody("approve", { confidence: PAYOUT_CONFIDENCE_FLOOR, noul: PAYOUT_DISPUTE_NOUL - 0.01 })),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          )) as typeof fetch,
+      },
+    );
+    assert.equal(payoutCalls, 1);
+    assert.equal(outcome.held, false);
+  });
+
+  it("holds an approve when confidence is below the floor", async () => {
+    const seen: Seen = { calls: 0, url: "", auth: "", body: null };
+    let payoutCalls = 0;
+    const outcome = await payoutAfterJevGate(
+      sampleJob(),
+      async () => {
+        payoutCalls += 1;
+        return { batchId: "NO", status: "PENDING" };
+      },
+      { env: { JEV_API_KEY: "test-key" }, fetchImpl: mockFetch("low-confidence", seen) },
+    );
+    assert.equal(seen.calls, 1);
+    assert.equal(payoutCalls, 0);
+    assert.equal(outcome.held, true);
+    assert.equal(outcome.gate.decision, "hold");
+    assert.equal(outcome.gate.choice, "approve");
+    assert.equal(outcome.gate.payoutAttempted, false);
+    assert.ok(outcome.gate.confidence != null && outcome.gate.confidence < PAYOUT_CONFIDENCE_FLOOR);
+  });
+
+  it("holds an approve when the dispute Noul is at or above 0.5", async () => {
+    const seen: Seen = { calls: 0, url: "", auth: "", body: null };
+    let payoutCalls = 0;
+    const outcome = await payoutAfterJevGate(
+      sampleJob(),
+      async () => {
+        payoutCalls += 1;
+        return { batchId: "NO", status: "PENDING" };
+      },
+      { env: { JEV_API_KEY: "test-key" }, fetchImpl: mockFetch("dispute", seen) },
+    );
+    assert.equal(seen.calls, 1);
+    assert.equal(payoutCalls, 0);
+    assert.equal(outcome.held, true);
+    assert.equal(outcome.gate.decision, "hold");
+    assert.equal(outcome.gate.choice, "approve");
+    assert.equal(outcome.gate.confidence, 0.91);
+    assert.equal(outcome.gate.noul, PAYOUT_DISPUTE_NOUL);
+    assert.equal(outcome.payout, null);
   });
 
   it("holds when a configured key gets a failed response", async () => {
@@ -189,7 +289,7 @@ describe("payout gate", () => {
   });
 
   it("reads a result envelope and still holds", () => {
-    const parsed = parsePayoutChoice(choiceBody("hold", true));
+    const parsed = parsePayoutChoice(choiceBody("hold", { envelope: true }));
     assert.equal(parsed.choice, "hold");
     assert.equal(parsed.model, "jev-1.13.0");
   });
@@ -199,5 +299,11 @@ describe("payout gate", () => {
     const request = buildPayoutGateRequest(sampleJob(), "jev-latest");
     assert.equal(request.state, text);
     assert.equal(String(request.state).includes("before.jpg"), false);
+    const questions = JSON.stringify(request.questions);
+    assert.equal(questions.includes("before.jpg"), false);
+    assert.equal(questions.includes("/uploads/after.png"), false);
+    assert.match(questions, /Do not compute or replace the amount/);
+    assert.match(questions, /legal judgment/);
+    assert.equal(request.questions.payout_dispute.type, "noul");
   });
 });
