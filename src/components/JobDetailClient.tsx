@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Job } from "@/lib/types";
+import { JevPayoutNotice } from "./JevPayoutNotice";
 import { StatusBadge } from "./StatusBadge";
 
 export function JobDetailClient({ initialJob }: { initialJob: Job }) {
@@ -109,6 +110,30 @@ export function JobDetailClient({ initialJob }: { initialJob: Job }) {
     }
   }
 
+  async function retryPayout() {
+    setBusy("payout");
+    setError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/payout`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Payout failed");
+      if (data.job) setJob(data.job);
+      if (data.held || data.job?.paymentStatus === "payout_held") {
+        setMessage("Jev held this payout. PayPal was not asked to create it.");
+        return;
+      }
+      setMessage(
+        data.payout?.batchId
+          ? `Payout continued through PayPal (${data.payout.batchId}).`
+          : "Payout continued through PayPal."
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function captureAndPayout() {
     setBusy("capture");
     setError(null);
@@ -121,6 +146,10 @@ export function JobDetailClient({ initialJob }: { initialJob: Job }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Capture failed");
       setJob(data.job);
+      if (data.held || data.job?.paymentStatus === "payout_held") {
+        setMessage("Jev held this payout. PayPal was not asked to create it.");
+        return;
+      }
       router.push(`/jobs/${job.id}/success`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
@@ -249,8 +278,9 @@ export function JobDetailClient({ initialJob }: { initialJob: Job }) {
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold">3. Pay with PayPal (sandbox)</h2>
         <p className="mt-1 text-sm text-slate-500">
-          On pass, the PayPal agent creates an Orders v2 order (customer pays), then capture +
-          optional Payouts to the contractor email.
+          On pass, the PayPal agent creates an Orders v2 order (customer pays), then capture.
+          Before a payout, an optional Jev text gate can approve or hold. Approve continues
+          into the existing sandbox payout. Hold stops it. Jev does not send the money.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <button
@@ -266,13 +296,23 @@ export function JobDetailClient({ initialJob }: { initialJob: Job }) {
             disabled={
               busy !== null ||
               !job.paypalOrderId ||
-              ["paid", "payout_sent"].includes(job.paymentStatus)
+              ["paid", "payout_sent", "payout_held"].includes(job.paymentStatus)
             }
             onClick={() => void captureAndPayout()}
             className="rounded-lg border border-[#0070BA] px-4 py-2.5 text-sm font-medium text-[#0070BA] hover:bg-sky-50 disabled:opacity-50"
           >
             {busy === "capture" ? "Capturing…" : "Capture + payout contractor"}
           </button>
+          {job.paymentStatus === "payout_held" && (
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void retryPayout()}
+              className="rounded-lg border border-amber-700 px-4 py-2.5 text-sm font-medium text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+            >
+              {busy === "payout" ? "Checking gate…" : "Retry payout"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void refresh()}
@@ -280,6 +320,9 @@ export function JobDetailClient({ initialJob }: { initialJob: Job }) {
           >
             Refresh
           </button>
+        </div>
+        <div className="mt-4">
+          <JevPayoutNotice decision={job.jevPayout} />
         </div>
         {(approveUrl || agentPath || job.paypalOrderId) && (
           <dl className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">

@@ -10,6 +10,8 @@ import {
   getPayPalMode,
   type CreatedOrder,
 } from "./paypal";
+import { payoutAfterJevGate, type PayoutGateOutcome } from "./jev/payout-gate";
+import { resolveJevApiKey } from "./jev/systemone";
 import type { Job } from "./types";
 
 let toolkit: PayPalAgentToolkit | null = null;
@@ -159,14 +161,24 @@ export async function agentCaptureOrder(orderId: string) {
   return captureOrder(orderId);
 }
 
-export async function agentPayoutToContractor(job: Job) {
-  return createPayout({
-    email: job.contractorEmail,
-    amount: job.amount,
-    currency: job.currency,
-    note: `JobProof payout for "${job.title}" (${job.id})`,
-    senderItemId: job.id.replace(/-/g, "").slice(0, 30),
-  });
+export type ContractorPayout = Awaited<ReturnType<typeof createPayout>>;
+
+/**
+ * Jev approve/hold gate, then the existing Payouts call.
+ * Hold returns no batch. Approve does not create the batch; createPayout does.
+ */
+export async function agentPayoutToContractor(
+  job: Job,
+): Promise<PayoutGateOutcome<ContractorPayout>> {
+  return payoutAfterJevGate(job, (current) =>
+    createPayout({
+      email: current.contractorEmail,
+      amount: current.amount,
+      currency: current.currency,
+      note: `JobProof payout for "${current.title}" (${current.id})`,
+      senderItemId: current.id.replace(/-/g, "").slice(0, 30),
+    }),
+  );
 }
 
 export function describeAgentCapabilities() {
@@ -174,8 +186,12 @@ export function describeAgentCapabilities() {
     mode: getPayPalMode(),
     toolkitLoaded: Boolean(getPayPalToolkit() || getPayPalMode() === "demo"),
     tools: ["create_order", "get_order", "pay_order", "payouts (REST)"],
+    jevPayoutGate: {
+      configured: Boolean(resolveJevApiKey(process.env)),
+      role: "text-only approve/hold Choice before payout; does not send money",
+    },
     aiRequired: false,
     notes:
-      "JobProof uses a deterministic PayPal agent orchestrator. Optional OpenAI only augments the photo completeness scorer.",
+      "JobProof uses a deterministic PayPal agent orchestrator. Optional Jev (System One) is a text gate before payout. Optional OpenAI only augments the photo completeness scorer.",
   };
 }
