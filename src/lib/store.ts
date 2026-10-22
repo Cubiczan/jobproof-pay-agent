@@ -2,7 +2,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { Job } from "./types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// Vercel functions have a read-only filesystem except /tmp; keep the demo store there.
+const DATA_DIR = process.env.VERCEL ? "/tmp/jobproof-data" : path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "jobs.json");
 
 async function ensureStore(): Promise<void> {
