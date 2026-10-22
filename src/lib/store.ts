@@ -29,7 +29,20 @@ export async function getJob(id: string): Promise<Job | undefined> {
   return jobs.find((j) => j.id === id);
 }
 
-export async function saveJob(job: Job): Promise<Job> {
+// Serialize read-modify-write so concurrent requests (e.g. before + after proof
+// uploads) can't interleave and corrupt or clobber jobs.json.
+let queue: Promise<unknown> = Promise.resolve();
+function locked<T>(fn: () => Promise<T>): Promise<T> {
+  const run = queue.then(fn, fn);
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+export function saveJob(job: Job): Promise<Job> {
+  return locked(() => saveJobUnlocked(job));
+}
+
+async function saveJobUnlocked(job: Job): Promise<Job> {
   await ensureStore();
   const jobs = await listJobs();
   const idx = jobs.findIndex((j) => j.id === job.id);
@@ -38,20 +51,24 @@ export async function saveJob(job: Job): Promise<Job> {
   } else {
     jobs.unshift(job);
   }
-  await fs.writeFile(DATA_FILE, JSON.stringify({ jobs }, null, 2), "utf8");
+  const tmp = `${DATA_FILE}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify({ jobs }, null, 2), "utf8");
+  await fs.rename(tmp, DATA_FILE);
   return job;
 }
 
-export async function updateJob(
+export function updateJob(
   id: string,
   patch: Partial<Job>
 ): Promise<Job | undefined> {
-  const job = await getJob(id);
-  if (!job) return undefined;
-  const next: Job = {
-    ...job,
-    ...patch,
-    updatedAt: new Date().toISOString(),
-  };
-  return saveJob(next);
+  return locked(async () => {
+    const job = await getJob(id);
+    if (!job) return undefined;
+    const next: Job = {
+      ...job,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    return saveJobUnlocked(next);
+  });
 }
