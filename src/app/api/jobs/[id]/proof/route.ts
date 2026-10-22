@@ -75,12 +75,18 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: "Max 8MB" }, { status: 400 });
   }
 
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  const ext = file.name.split(".").pop()?.replace(/[^a-z0-9]/gi, "") || "jpg";
-  const filename = `${id}-${slot}-${Date.now()}.${ext}`;
   const buf = Buffer.from(await file.arrayBuffer());
-  await fs.writeFile(path.join(UPLOAD_DIR, filename), buf);
-  const url = `/uploads/${filename}`;
+  let url: string;
+  if (process.env.VERCEL) {
+    // public/ is read-only on Vercel; inline the image into the demo store.
+    url = `data:${file.type};base64,${buf.toString("base64")}`;
+  } else {
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    const ext = file.name.split(".").pop()?.replace(/[^a-z0-9]/gi, "") || "jpg";
+    const filename = `${id}-${slot}-${Date.now()}.${ext}`;
+    await fs.writeFile(path.join(UPLOAD_DIR, filename), buf);
+    url = `/uploads/${filename}`;
+  }
 
   const meta: ImageMeta = {
     name: file.name,
